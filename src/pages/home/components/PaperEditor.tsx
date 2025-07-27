@@ -1,21 +1,18 @@
 // components/PaperEditor.tsx
-import { api } from '@convex/_generated/api'
-import { Doc } from '@convex/_generated/dataModel'
 import { EditorProvider } from '@tiptap/react'
-import { useMutation } from 'convex/react'
 import debounce from 'lodash.debounce'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { BubbleMenuToolbar } from './BubbleMenuToolbar'
+import { notesService, type Note } from '@/lib/supabaseService'
 
 import { extensions } from '@/lib/tiptapConfig'
 
 interface PaperEditorProps {
-  note: Doc<'notes'>
+  note: Note
 }
 
 export const PaperEditor = ({ note }: PaperEditorProps) => {
-  const updateNote = useMutation(api.notes.mutations.updateNote)
   const [isInitialized, setIsInitialized] = useState(false)
   const hasUnsavedChanges = useRef(false)
   const [localContent, setLocalContent] = useState(note.content || '<p></p>')
@@ -28,11 +25,15 @@ export const PaperEditor = ({ note }: PaperEditorProps) => {
   // Debounced save function
   const debouncedSave = useMemo(
     () =>
-      debounce((content: string) => {
-        void updateNote({ noteId: note._id, data: { content } })
-        hasUnsavedChanges.current = false
+      debounce(async (content: string) => {
+        try {
+          await notesService.updateNote(note.id, { content })
+          hasUnsavedChanges.current = false
+        } catch (error) {
+          console.error('Failed to save note content:', error)
+        }
       }, 1000),
-    [note._id, updateNote]
+    [note.id]
   )
 
   // Flush pending saves on unmount

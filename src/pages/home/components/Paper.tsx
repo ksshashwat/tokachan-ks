@@ -1,44 +1,47 @@
-import { api } from '@convex/_generated/api'
-import type { Id } from '@convex/_generated/dataModel'
-import { Doc } from '@convex/_generated/dataModel'
-import { useMutation } from 'convex/react'
 import debounce from 'lodash.debounce'
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import '../editor.styles.css'
 
 import { PaperEditor } from './PaperEditor'
+import { notesService, type Note } from '@/lib/supabaseService'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 import { COLORS_MAP } from '@/lib/constants'
 
 type PaperProps = {
-  note: Doc<'notes'>
+  note: Note
   paperRef: React.Ref<HTMLDivElement>
+  isDeleting?: boolean
+  onDeleteAnimationComplete?: () => void
 }
 
 const DEBOUNCE_TIME = 1000
 
-export const Paper = ({ note, paperRef }: PaperProps) => {
-  const paperLayoutId = `paper-${note._id}`
-  const updateNote = useMutation(api.notes.mutations.updateNote)
+export const Paper = ({ note, paperRef, isDeleting = false, onDeleteAnimationComplete }: PaperProps) => {
+  const paperLayoutId = `paper-${note.id}`
   const [localTitle, setLocalTitle] = useState(note.title)
 
   const hasUnsavedChanges = useRef(false)
 
   const debouncedSave = useMemo(
     () =>
-      debounce((noteId: Id<'notes'>, data: { title?: string }) => {
-        void updateNote({ noteId, data })
-        hasUnsavedChanges.current = false
+      debounce(async (noteId: string, data: { title?: string }) => {
+        try {
+          await notesService.updateNote(noteId, data)
+          hasUnsavedChanges.current = false
+        } catch (error) {
+          console.error('Failed to save note:', error)
+        }
       }, DEBOUNCE_TIME),
-    [updateNote]
+    []
   )
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value
     setLocalTitle(newTitle) // Immediate UI update
     hasUnsavedChanges.current = true
-    debouncedSave(note._id, { title: newTitle }) // Background save
+    debouncedSave(note.id, { title: newTitle }) // Background save
   }
 
   // Sync local state when note prop changes (from server updates)
@@ -68,12 +71,20 @@ export const Paper = ({ note, paperRef }: PaperProps) => {
           aspectRatio: '210/297',
         }}
         initial={{ scale: 0.2, y: 300 }}
-        animate={{ scale: 1, y: 0 }}
+        animate={
+          isDeleting 
+            ? { opacity: 0, scale: 0.8 }
+            : { scale: 1, y: 0, opacity: 1 }
+        }
         exit={{ scale: 0.2, y: 300, transition: { duration: 0.1 } }}
         transition={{
-          type: 'spring',
-          damping: 26,
-          stiffness: 300,
+          duration: isDeleting ? 0.3 : 0.6,
+          ease: 'easeInOut',
+        }}
+        onAnimationComplete={() => {
+          if (isDeleting && onDeleteAnimationComplete) {
+            onDeleteAnimationComplete()
+          }
         }}
       >
         {/* Paper punch holes */}
@@ -103,7 +114,9 @@ export const Paper = ({ note, paperRef }: PaperProps) => {
             />
           </div>
 
-          <PaperEditor note={note} />
+          <ErrorBoundary>
+            <PaperEditor note={note} />
+          </ErrorBoundary>
         </div>
       </motion.div>
     </div>

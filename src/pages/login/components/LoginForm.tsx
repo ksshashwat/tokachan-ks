@@ -1,58 +1,78 @@
-import { useAuthActions } from '@convex-dev/auth/react'
-import { useActionState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { InputWithFeedback } from '@/components/InputWithFeedback'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { handlePromise } from '@/lib/utils'
+import { authService } from '@/lib/supabaseService'
 
-const CONVEX_AUTH_SIGN_IN_KEY = 'signIn'
-
-type FormState =
-  | {
-      status: 'error'
-      errors: {
-        email: string
-      }
-    }
-  | {
-      status: 'success'
-    }
+type FormState = {
+  status: 'idle' | 'loading' | 'error'
+  errors: {
+    email?: string
+    password?: string
+  }
+}
 
 export function LoginForm() {
-  const { signIn } = useAuthActions()
+  const [state, setState] = useState<FormState>({
+    status: 'idle',
+    errors: {},
+  })
 
-  const [state, formAction, isPending] = useActionState<FormState, FormData>(
-    async (_, formData) => {
-      const errors = {
-        email: '',
-      }
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setState({ status: 'loading', errors: {} })
 
-      const [error] = await handlePromise(signIn('password', formData))
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    if (!email || !password) {
+      setState({
+        status: 'error',
+        errors: {
+          email: 'Please fill in all fields',
+        },
+      })
+      return
+    }
+
+    try {
+      const { error } = await authService.signIn(email, password)
 
       if (error) {
-        errors.email = 'Something went wrong.'
-        return { status: 'error', errors }
+        setState({
+          status: 'error',
+          errors: {
+            email: error.message,
+          },
+        })
+        return
       }
 
-      toast.success('Login successful')
-      return { status: 'success' }
-    },
-    { status: 'error', errors: { email: '' } }
-  )
+      toast.success('Signed in successfully!')
+      // Redirect or update app state as needed
+    } catch (error) {
+      setState({
+        status: 'error',
+        errors: {
+          email: 'An unexpected error occurred',
+        },
+      })
+    }
+  }
 
   return (
-    <form className="flex flex-col gap-9" action={formAction}>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-9">
       <div className="flex flex-col gap-2.5">
-        <input name="flow" type="hidden" value={CONVEX_AUTH_SIGN_IN_KEY} />
         <Label htmlFor="email">Email</Label>
         <InputWithFeedback
           name="email"
           id="email"
           placeholder="naruto@konoha.com"
           type="email"
-          errorMessage={state.status === 'error' ? state.errors.email : ''}
+          errorMessage={state.errors.email}
           isError={state.status === 'error' && !!state.errors.email}
         />
       </div>
@@ -67,7 +87,12 @@ export function LoginForm() {
           placeholder="********"
         />
       </div>
-      <Button type="submit" isLoading={isPending} disabled={isPending} className="mt-2">
+      <Button 
+        type="submit" 
+        isLoading={state.status === 'loading'} 
+        disabled={state.status === 'loading'} 
+        className="mt-2"
+      >
         Login
       </Button>
     </form>

@@ -1,11 +1,10 @@
-import { api } from '@convex/_generated/api'
-import { useConvexAuth, useQuery } from 'convex/react'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { generatePath, useNavigate } from 'react-router'
 
 import { LoginForm } from './components/LoginForm'
 import { RegisterForm } from './components/RegisterForm'
+import { authService } from '@/lib/supabaseService'
 
 import TokaImg from '@/assets/toka.png'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,17 +15,34 @@ export function LoginPage() {
   const [tab, setTab] = useState<typeof TAB_VALUES.LOGIN | typeof TAB_VALUES.REGISTER>(
     TAB_VALUES.LOGIN
   )
-
-  const user = useQuery(api.users.queries.getCurrentUser)
-  const state = useConvexAuth()
-  const isLoading = user === undefined || state.isLoading
+  const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (!isLoading && user) {
-      void navigate(generatePath(ROUTES.home))
+    const checkAuth = async () => {
+      try {
+        const { session } = await authService.getSession()
+        if (session?.user) {
+          navigate(generatePath(ROUTES.home))
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [isLoading, user, navigate])
+
+    checkAuth()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        navigate(generatePath(ROUTES.home))
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [navigate])
 
   if (isLoading) {
     return (

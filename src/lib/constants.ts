@@ -1,4 +1,4 @@
-import { Colors } from '@convex/notes/mutations'
+import { type Colors } from '@/lib/supabaseService'
 
 export const ROUTES = {
   login: '/',

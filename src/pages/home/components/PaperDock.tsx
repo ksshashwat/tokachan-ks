@@ -1,46 +1,25 @@
-import { api } from '@convex/_generated/api'
-import { Doc, Id } from '@convex/_generated/dataModel'
-import { Colors } from '@convex/notes/mutations'
-import { useMutation, useQuery } from 'convex/react'
 import { PlusIcon } from 'lucide-react'
 import { motion } from 'motion/react'
 
 import { PaperThumbnail } from './PaperThumbnail'
+import { notesService, type Note, type Colors } from '@/lib/supabaseService'
 
 interface PaperDockProps {
-  notes: Array<Doc<'notes'>>
-  activeNoteId: Id<'notes'> | null
-  onNoteSelect: (id: Id<'notes'>) => void
+  notes: Array<Note>
+  activeNoteId: string | null
+  onNoteSelect: (id: string) => void
+  onNoteCreated?: (note: Note) => void
 }
 
-export const PaperDock = ({ notes, activeNoteId, onNoteSelect }: PaperDockProps) => {
-  const user = useQuery(api.users.queries.getCurrentUser)
-
-  const createNote = useMutation(api.notes.mutations.createNote).withOptimisticUpdate(
-    (localStore) => {
-      if (!user?._id) {
-        throw new Error('User not authenticated')
-      }
-
-      const existingNotes = localStore.getQuery(api.notes.queries.getAllUserNotes, {}) || []
-      const tempId = `tmp-${Date.now()}-${Math.random()}`
-      const optimisticNote = {
-        _id: tempId as Id<'notes'>,
-        title: 'Untitled',
-        content: '',
-        userId: user?._id,
-        _creationTime: Date.now(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        color: 'Ocean' as Colors,
-      }
-      // Append to the notes list
-      localStore.setQuery(api.notes.queries.getAllUserNotes, {}, [
-        ...(existingNotes ?? []),
-        optimisticNote,
-      ])
+export const PaperDock = ({ notes, activeNoteId, onNoteSelect, onNoteCreated }: PaperDockProps) => {
+  const handleCreateNote = async () => {
+    try {
+      const newNote = await notesService.createNote()
+      onNoteCreated?.(newNote)
+    } catch (error) {
+      console.error('Failed to create note:', error)
     }
-  )
+  }
 
   return (
     <motion.div
@@ -56,7 +35,7 @@ export const PaperDock = ({ notes, activeNoteId, onNoteSelect }: PaperDockProps)
         <div className="flex items-center gap-3">
           {notes.map((note, index) => (
             <motion.div
-              key={note._id}
+              key={note.id}
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{
@@ -66,8 +45,8 @@ export const PaperDock = ({ notes, activeNoteId, onNoteSelect }: PaperDockProps)
                 stiffness: 300,
               }}
             >
-              {activeNoteId !== note._id && (
-                <PaperThumbnail note={note} onClick={() => onNoteSelect(note._id)} />
+              {activeNoteId !== note.id && (
+                <PaperThumbnail note={note} onClick={() => onNoteSelect(note.id)} />
               )}
             </motion.div>
           ))}
@@ -84,7 +63,7 @@ export const PaperDock = ({ notes, activeNoteId, onNoteSelect }: PaperDockProps)
               damping: 20,
               stiffness: 300,
             }}
-            onClick={() => createNote({})}
+            onClick={handleCreateNote}
           >
             <div className="bg-gradient-playful text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full">
               <PlusIcon className="h-4 w-4" strokeWidth={3} />

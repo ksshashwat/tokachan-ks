@@ -1,19 +1,19 @@
-import { Doc } from '@convex/_generated/dataModel'
 import { motion } from 'motion/react'
 import { useState } from 'react'
 
 import { COLORS_MAP } from '@/lib/constants'
+import { type Note } from '@/lib/supabaseService'
 
 type PaperProps = {
-  note: Doc<'notes'>
+  note: Note
   onClick?: () => void
 }
 
 export const PaperThumbnail = ({ note, onClick }: PaperProps) => {
   const [isHovered, setIsHovered] = useState(false)
 
-  const paperLayoutId = `paper-${note._id}`
-  const paperHeaderLayoutId = `paper-header-${note._id}`
+  const paperLayoutId = `paper-${note.id}`
+  const paperHeaderLayoutId = `paper-header-${note.id}`
 
   return (
     <motion.div

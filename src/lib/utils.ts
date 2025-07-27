@@ -1,5 +1,4 @@
 import { clsx, type ClassValue } from 'clsx'
-import { ConvexError } from 'convex/values'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: Array<ClassValue>) {
@@ -24,9 +23,5 @@ export function getErrorMessage({
   error: Error
   fallbackText?: string
 }): string {
-  if (error instanceof ConvexError) {
-    return error.data as string
-  }
-
   return fallbackText ?? error.message
 }

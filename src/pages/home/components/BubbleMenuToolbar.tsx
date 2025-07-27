@@ -10,55 +10,36 @@ import {
   Link,
   List,
   ListOrdered,
-  Loader2,
   Quote,
-  Sparkles,
 } from 'lucide-react'
 import { useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 
 export const BubbleMenuToolbar = () => {
   const { editor } = useCurrentEditor()
   const containerRef = useRef<HTMLElement>(null)
 
+  // Since we removed the AI extension, we'll remove the AI-related state
+  // and keep only the essential editor functionality
   const editorState = useEditorState({
     editor,
-
     selector: ({ editor }) => {
       if (!editor) return null
-
+      
+      // Return basic editor state info
       return {
-        isAiGenerating: editor.storage.ai.state === 'loading',
+        isSelectionEmpty: editor.state.selection.empty,
+        canUndo: editor.can().undo(),
+        canRedo: editor.can().redo(),
       }
     },
   })
 
   if (!editor) return null
 
-  const isAiGenerating = editorState?.isAiGenerating ?? false
-
-  const runAICommand = (command: string) => {
-    if (!editor) return
-
-    switch (command) {
-      case 'simplify':
-        editor.chain().focus().aiSimplify().run()
-        break
-      case 'shorten':
-        editor.chain().focus().aiShorten().run()
-        break
-      case 'summarize':
-        editor.chain().focus().aiSummarize().run()
-        break
-    }
-  }
+  // AI functionality is no longer available since we removed the extension
+  const isAiGenerating = false
 
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href as string
@@ -178,40 +159,8 @@ export const BubbleMenuToolbar = () => {
           <Quote className="h-4 w-4" />
         </Button>
 
-        <div className="bg-border mx-1 h-6 w-px" />
-
-        {/* AI Dropdown */}
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-primary"
-              onMouseDown={(e) => e.preventDefault()}
-              disabled={isAiGenerating}
-            >
-              {isAiGenerating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" container={containerRef.current}>
-            <DropdownMenuItem onClick={() => runAICommand('simplify')} disabled={isAiGenerating}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Simplify
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => runAICommand('shorten')} disabled={isAiGenerating}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Shorten
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => runAICommand('summarize')} disabled={isAiGenerating}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Summarize
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* AI functionality has been removed since @tiptap-pro/extension-ai was causing installation issues */}
+        {/* Future: Re-add AI features when extension is available */}
       </div>
     </BubbleMenu>
   )

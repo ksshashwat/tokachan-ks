@@ -1,85 +1,94 @@
-import { useAuthActions } from '@convex-dev/auth/react'
-import { api } from '@convex/_generated/api'
-import { useConvex } from 'convex/react'
-import { useActionState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { InputWithFeedback } from '@/components/InputWithFeedback'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { handlePromise } from '@/lib/utils'
-
-const CONVEX_AUTH_SIGN_UP_KEY = 'signUp'
+import { authService } from '@/lib/supabaseService'
 
 const PASSWORD_MIN_LENGTH = 6
 
-type FormState =
-  | {
-      status: 'error'
-      errors: {
-        email: string
-        password: string
-      }
-    }
-  | {
-      status: 'success'
-    }
+type FormState = {
+  status: 'idle' | 'loading' | 'error'
+  errors: {
+    email?: string
+    password?: string
+  }
+}
 
 export function RegisterForm() {
-  const convex = useConvex()
-  const { signIn } = useAuthActions()
+  const [state, setState] = useState<FormState>({
+    status: 'idle',
+    errors: {},
+  })
 
-  const [state, formAction, isPending] = useActionState<FormState, FormData>(
-    async (_, formData) => {
-      const email = formData.get('email') as string
-      const password = formData.get('password') as string
-      const confirmPassword = formData.get('confirmPassword') as string
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setState({ status: 'loading', errors: {} })
 
-      const errors = {
-        email: '',
-        password: '',
-      }
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const confirmPassword = formData.get('confirmPassword') as string
 
-      if (password.length < PASSWORD_MIN_LENGTH) {
-        errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`
-        return { status: 'error', errors }
-      }
+    if (!email || !password || !confirmPassword) {
+      setState({
+        status: 'error',
+        errors: {
+          email: 'Please fill in all fields',
+        },
+      })
+      return
+    }
 
-      if (password !== confirmPassword) {
-        errors.password = 'Passwords do not match'
-        return { status: 'error', errors }
-      }
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setState({
+        status: 'error',
+        errors: {
+          password: `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`,
+        },
+      })
+      return
+    }
 
-      const [existingUserError, existingUser] = await handlePromise(
-        convex.query(api.users.queries.getUserByEmail, { email })
-      )
+    if (password !== confirmPassword) {
+      setState({
+        status: 'error',
+        errors: {
+          password: 'Passwords do not match',
+        },
+      })
+      return
+    }
 
-      if (existingUserError) {
-        errors.email = 'Something went wrong during registration. Please try later.'
-        return { status: 'error', errors }
-      }
-
-      if (existingUser) {
-        errors.email = 'Email already exists'
-        return { status: 'error', errors }
-      }
-
-      const [error] = await handlePromise(signIn('password', formData))
+    try {
+      // Register the user (Supabase will handle duplicate email validation)
+      const { error } = await authService.signUp(email, password)
 
       if (error) {
-        errors.email = 'Something went wrong during registration. Please try later.'
-        return { status: 'error', errors }
+        setState({
+          status: 'error',
+          errors: {
+            email: error.message,
+          },
+        })
+        return
       }
 
-      toast.success('Registration successful')
-      return { status: 'success' }
-    },
-    { status: 'error', errors: { email: '', password: '' } }
-  )
+      toast.success('Registration successful! Please check your email to verify your account.')
+      // Redirect or update app state as needed
+    } catch (error) {
+      setState({
+        status: 'error',
+        errors: {
+          email: 'An unexpected error occurred',
+        },
+      })
+    }
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-9">
-      <input name="flow" type="hidden" value={CONVEX_AUTH_SIGN_UP_KEY} />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-9">
       <div className="flex flex-col gap-2.5">
         <Label htmlFor="email">Email</Label>
         <InputWithFeedback
@@ -87,8 +96,8 @@ export function RegisterForm() {
           id="email"
           placeholder="naruto@konoha.com"
           type="email"
-          errorMessage={state.status === 'error' ? state.errors?.email : ''}
-          isError={state.status === 'error' && !!state.errors?.email}
+          errorMessage={state.errors.email}
+          isError={state.status === 'error' && !!state.errors.email}
           required
         />
       </div>
@@ -97,8 +106,8 @@ export function RegisterForm() {
         <InputWithFeedback
           name="password"
           id="password"
-          errorMessage={state.status === 'error' ? state.errors?.password : ''}
-          isError={state.status === 'error' && !!state.errors?.password}
+          errorMessage={state.errors.password}
+          isError={state.status === 'error' && !!state.errors.password}
           required
           type="password"
           helperText="Password must be at least 6 characters long"
@@ -112,12 +121,17 @@ export function RegisterForm() {
           id="confirmPassword"
           required
           // just show error border if any password errors
-          isError={state.status === 'error' && !!state.errors?.password}
+          isError={state.status === 'error' && !!state.errors.password}
           type="password"
           placeholder="********"
         />
       </div>
-      <Button type="submit" isLoading={isPending} disabled={isPending} className="mt-2">
+      <Button 
+        type="submit" 
+        isLoading={state.status === 'loading'} 
+        disabled={state.status === 'loading'} 
+        className="mt-2"
+      >
         Register
       </Button>
     </form>

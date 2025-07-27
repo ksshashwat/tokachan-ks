@@ -1,0 +1,11 @@
+# Update Your .env File
+
+Please update your `.env` file to use the correct port:
+
+```bash
+VITE_SUPABASE_URL=https://tghdwxmpwzykivsytlbe.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRnaGR3eG1wd3p5a2l2c3l0bGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1ODk3NzksImV4cCI6MjA2OTE2NTc3OX0.HmylepvkXH6TDQm4I4sJe7GGZZKZ50v0V4bxWIXwIvM
+SUPABASE_SITE_URL=http://localhost:5174
+```
+
+**Change**: Update the port from `3000` to `5174` to match your current dev server. 

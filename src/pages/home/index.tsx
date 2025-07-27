@@ -1,42 +1,40 @@
-import { api } from '@convex/_generated/api'
-import { Id } from '@convex/_generated/dataModel'
-import { Colors } from '@convex/notes/mutations'
-import { useMutation, useQuery } from 'convex/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { FloatingControls } from './components/FloatingControls'
 import { Paper } from './components/Paper'
 import { PaperDock } from './components/PaperDock'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { notesService, type Colors } from '@/lib/supabaseService'
 
 export function HomePage() {
-  const notes = useQuery(api.notes.queries.getAllUserNotes, {})
-  const [activeNoteId, setActiveNoteId] = useState<Id<'notes'> | null>(null)
-  const updateNoteColor = useMutation(api.notes.mutations.updateNote).withOptimisticUpdate(
-    (localStore, args) => {
-      const color = args.data.color
+  const [notes, setNotes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [isTrashOpen, setIsTrashOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null)
 
-      if (!color) {
-        return localStore
+
+
+  // Load notes on component mount
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        const notesData = await notesService.getAllUserNotes()
+        setNotes(notesData)
+      } catch (error) {
+        console.error('Failed to load notes:', error)
+      } finally {
+        setLoading(false)
       }
-
-      const existingNotes = localStore.getQuery(api.notes.queries.getAllUserNotes, {}) || []
-      const note = existingNotes.find((note) => note._id === activeNoteId)
-
-      if (note) {
-        const newNote = { ...note, color }
-        const allNewNotes = existingNotes.map((n) => (n._id === activeNoteId ? newNote : n))
-        localStore.setQuery(api.notes.queries.getAllUserNotes, {}, allNewNotes)
-      }
-      return localStore
     }
-  )
 
-  // Refs for click-outside logic
-  const paperRef = useRef<HTMLDivElement>(null)
-  const floatingRef = useRef<HTMLDivElement>(null)
+    loadNotes()
+  }, [])
 
-  const handlePaperSelect = (id: Id<'notes'>) => {
+  const handlePaperSelect = (id: string) => {
     setActiveNoteId(id)
   }
 
@@ -44,10 +42,69 @@ export function HomePage() {
     setActiveNoteId(null)
   }
 
-  const handleColorChange = (color: Colors) => {
+  const handleColorChange = async (color: Colors) => {
     if (activeNoteId) {
-      void updateNoteColor({ noteId: activeNoteId, data: { color } })
+      try {
+        await notesService.updateNote(activeNoteId, { color })
+        // Update local state optimistically
+        setNotes(prevNotes => 
+          prevNotes.map(note => 
+            note.id === activeNoteId ? { ...note, color } : note
+          )
+        )
+      } catch (error) {
+        console.error('Failed to update note color:', error)
+      }
     }
+  }
+
+  const handleDeleteClick = () => {
+    if (!activeNoteId) return
+    setNoteToDelete(activeNoteId) // Capture the note ID before opening modal
+    setShowDeleteConfirm(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!noteToDelete) return
+    
+    setShowDeleteConfirm(false)
+    
+    try {
+      // Call delete API immediately
+      await notesService.deleteNote(noteToDelete)
+      
+      // Remove from local state
+      setNotes(prevNotes => prevNotes.filter(note => note.id !== noteToDelete))
+      
+      // Close the paper view
+      setActiveNoteId(null)
+      setNoteToDelete(null)
+      
+      console.log('✅ Note deleted successfully on first confirm')
+    } catch (error) {
+      console.error('❌ Failed to delete note:', error)
+      // Reset state on error
+      setNoteToDelete(null)
+    }
+  }
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setNoteToDelete(null) // Clear the note to delete
+  }
+
+  // Animation completion handler (now simplified for trash can animation only)
+  const handleDeleteAnimationComplete = async () => {
+    if (!deletingNoteId) return
+    
+    // Open trash can lid
+    setIsTrashOpen(true)
+    
+    // Wait a bit, then close lid
+    setTimeout(() => {
+      setIsTrashOpen(false)
+      setDeletingNoteId(null)
+    }, 400)
   }
 
   // Click outside handler
@@ -70,7 +127,21 @@ export function HomePage() {
     }
   }, [activeNoteId])
 
-  const activeNote = notes?.find((note) => note._id === activeNoteId)
+  // Refs for click-outside logic
+  const paperRef = useRef<HTMLDivElement>(null)
+  const floatingRef = useRef<HTMLDivElement>(null)
+
+  const activeNote = notes?.find((note) => note.id === activeNoteId)
+
+  if (loading) {
+    return (
+      <div className="bg-gradient-bg font-rubik flex min-h-screen flex-col items-center justify-center overflow-hidden">
+        <div className="text-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-gradient-bg font-rubik flex min-h-screen flex-col items-center justify-center overflow-hidden">
@@ -118,12 +189,26 @@ export function HomePage() {
 
       <AnimatePresence>
         {activeNoteId && activeNote && (
-          <Paper key={activeNoteId} note={activeNote} paperRef={paperRef} />
+          <Paper 
+            key={activeNoteId} 
+            note={activeNote} 
+            paperRef={paperRef}
+            isDeleting={false} // No longer using animation for deletion
+            onDeleteAnimationComplete={handleDeleteAnimationComplete}
+          />
         )}
       </AnimatePresence>
 
       {/* Paper dock */}
-      <PaperDock notes={notes ?? []} activeNoteId={activeNoteId} onNoteSelect={handlePaperSelect} />
+      <PaperDock 
+        notes={notes ?? []} 
+        activeNoteId={activeNoteId} 
+        onNoteSelect={handlePaperSelect}
+        onNoteCreated={(newNote) => {
+          setNotes(prevNotes => [newNote, ...prevNotes])
+          setActiveNoteId(newNote.id)
+        }}
+      />
 
       {/* Floating controls when paper is active */}
       <AnimatePresence>
@@ -132,9 +217,22 @@ export function HomePage() {
             onClose={handleClosePaper}
             floatingRef={floatingRef}
             onColorChange={handleColorChange}
+            onDelete={handleDeleteClick}
+            isTrashOpen={isTrashOpen}
           />
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
+                  )}
+        </AnimatePresence>
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+          title="Delete Note"
+          message="Are you sure you want to delete this note? This action cannot be undone."
+        />
+
+
+      </div>
+    )
+  }
